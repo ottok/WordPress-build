@@ -4244,20 +4244,16 @@ function wp_strip_all_tags($string, $remove_breaks = false) {
 }
 
 /**
- * Sanitize a string from user input or from the db
+ * Internal helper funnction to sanitize a string from user input or from the db
  *
- * check for invalid UTF-8,
- * Convert single < characters to entity,
- * strip all tags,
- * remove line breaks, tabs and extra white space,
- * strip octets.
- *
- * @since 2.9.0
+ * @since 4.6.0
+ * @access private
  *
  * @param string $str
+ * @param bool $keep_newlines optional Whether to keep newlines. Default: false.
  * @return string
  */
-function sanitize_text_field( $str ) {
+function _sanitize_text_fields( $str, $keep_newlines ) {
 	$filtered = wp_check_invalid_utf8( $str );
 
 	if ( strpos($filtered, '<') !== false ) {
@@ -4265,7 +4261,12 @@ function sanitize_text_field( $str ) {
 		// This will strip extra whitespace for us.
 		$filtered = wp_strip_all_tags( $filtered, true );
 	} else {
-		$filtered = trim( preg_replace('/[\r\n\t ]+/', ' ', $filtered) );
+		if ( $keep_newlines ) {
+			$newline_regex = '';
+		} else {
+			$newline_regex = '\r\n';
+		}
+		$filtered = trim( preg_replace( '/['. $newline_regex .'\t ]+/', ' ', $filtered ) );
 	}
 
 	$found = false;
@@ -4278,6 +4279,61 @@ function sanitize_text_field( $str ) {
 		// Strip out the whitespace that may now exist after removing the octets.
 		$filtered = trim( preg_replace('/ +/', ' ', $filtered) );
 	}
+
+	return $filtered;
+}
+
+/**
+ * Sanitize a multiline string from user input or from the db
+ *
+ * Check for invalid UTF-8,
+ * convert single < characters to entity,
+ * strip all tags,
+ * remove tabs and extra white space,
+ * strip octets.
+ *
+ * The function is like sanitize_text_field() but
+ * preserves new lines (\n) which are
+ * legitimate input in for example text area elements.
+ *
+ * @since 4.6.0
+ *
+ * @param string $str
+ * @return string
+ */
+function sanitize_textarea_field( $str ) {
+	$filtered = _sanitize_text_fields( $str, true );
+
+	/**
+	 * Filter a sanitized textarea field string.
+	 *
+	 * @since 4.6.0
+	 *
+	 * @param string $filtered The sanitized string.
+	 * @param string $str      The string prior to being sanitized.
+	 */
+	return apply_filters( 'sanitize_textarea_field', $filtered, $str );
+}
+
+/**
+ * Sanitize a string from user input or from the db
+ *
+ * Check for invalid UTF-8,
+ * convert single < characters to entity,
+ * strip all tags,
+ * remove line breaks, tabs and extra white space,
+ * strip octets.
+ *
+ * If you need to sanitize multiline strings, use sanitize_textarea_field().
+ *
+ * @since 2.9.0
+ *
+ * @param string $str
+ * @param bool $newlines optional Whether to strip newlines (\n). Default: strip
+ * @return string
+ */
+function sanitize_text_field( $str ) {
+	$filtered = _sanitize_text_fields( $str );
 
 	/**
 	 * Filter a sanitized text field string.
